@@ -3,6 +3,8 @@ import fetch from "node-fetch";
 export async function getChatResponse(message, mode, isPro) {
   try {
     // ✅ Supported Groq models
+ console.log("🚨 USING NEW GROQ SERVICE — MODEL FIX VERSION");
+  console.log("isPro:", isPro);
     const model = isPro
       ? "llama-3.1-70b-versatile"   // PRO
       : "llama-3.1-8b-instant";     // FREE
