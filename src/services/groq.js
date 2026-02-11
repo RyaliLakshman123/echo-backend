@@ -2,7 +2,10 @@ import fetch from "node-fetch";
 
 export async function getChatResponse(message, mode, isPro) {
   try {
-    const model = "llama3-8b-8192"; // ✅ safest Groq model
+    // ✅ Supported Groq models
+    const model = isPro
+      ? "llama-3.1-70b-versatile"   // PRO
+      : "llama-3.1-8b-instant";     // FREE
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -29,16 +32,17 @@ export async function getChatResponse(message, mode, isPro) {
 
     console.log("🧠 GROQ RAW RESPONSE:", JSON.stringify(data, null, 2));
 
-    if (!response.ok) {
+    // 🔴 Explicit error handling
+    if (!response.ok || data.error) {
       return {
-        content: data.error?.message || "Groq request failed",
+        content: data.error?.message || "Groq API error",
         modelUsed: isPro ? "Echo Pro" : "Echo",
       };
     }
 
     const content =
       data?.choices?.[0]?.message?.content ??
-      "Groq returned no message";
+      "Groq returned no response";
 
     return {
       content,
