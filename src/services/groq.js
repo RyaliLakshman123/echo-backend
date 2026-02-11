@@ -2,12 +2,9 @@ import fetch from "node-fetch";
 
 export async function getChatResponse(message, mode, isPro) {
   try {
-    // ✅ Supported Groq models
- console.log("🚨 USING NEW GROQ SERVICE — MODEL FIX VERSION");
-  console.log("isPro:", isPro);
     const model = isPro
-      ? "llama-3.1-70b-versatile"   // PRO
-      : "llama-3.1-8b-instant";     // FREE
+      ? "llama-3.3-70b-versatile"   // ✅ PRO MODEL
+      : "llama-3.3-8b-instant";    // ✅ FREE MODEL
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -20,12 +17,9 @@ export async function getChatResponse(message, mode, isPro) {
         body: JSON.stringify({
           model,
           messages: [
-            {
-              role: "user",
-              content: message,
-            },
+            { role: "system", content: "You are Echo AI, a helpful assistant." },
+            { role: "user", content: message },
           ],
-          temperature: 0.7,
         }),
       }
     );
@@ -34,7 +28,7 @@ export async function getChatResponse(message, mode, isPro) {
 
     console.log("🧠 GROQ RAW RESPONSE:", JSON.stringify(data, null, 2));
 
-    // 🔴 Explicit error handling
+    // 🔴 Handle Groq errors explicitly
     if (!response.ok || data.error) {
       return {
         content: data.error?.message || "Groq API error",
@@ -43,13 +37,14 @@ export async function getChatResponse(message, mode, isPro) {
     }
 
     const content =
-      data?.choices?.[0]?.message?.content ??
-      "Groq returned no response";
+      data?.choices?.[0]?.message?.content?.trim() ||
+      "⚠️ Empty response from Groq";
 
     return {
       content,
       modelUsed: isPro ? "Echo Pro" : "Echo",
     };
+
   } catch (error) {
     console.error("🔥 Groq crash:", error);
 
