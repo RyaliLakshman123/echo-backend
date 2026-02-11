@@ -3,8 +3,8 @@ import fetch from "node-fetch";
 export async function getChatResponse(message, mode, isPro) {
   try {
     const model = isPro
-      ? "llama-3.3-70b-versatile"   // ✅ PRO MODEL
-      : "llama-3.3-8b-instant";    // ✅ FREE MODEL
+      ? "llama-3.2-70b-chat"      // ✅ PRO (WORKING)
+      : "llama-3.1-8b-instant";  // ✅ FREE (SAFE FALLBACK)
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -28,7 +28,6 @@ export async function getChatResponse(message, mode, isPro) {
 
     console.log("🧠 GROQ RAW RESPONSE:", JSON.stringify(data, null, 2));
 
-    // 🔴 Handle Groq errors explicitly
     if (!response.ok || data.error) {
       return {
         content: data.error?.message || "Groq API error",
@@ -36,12 +35,9 @@ export async function getChatResponse(message, mode, isPro) {
       };
     }
 
-    const content =
-      data?.choices?.[0]?.message?.content?.trim() ||
-      "⚠️ Empty response from Groq";
-
     return {
-      content,
+      content: data.choices?.[0]?.message?.content?.trim()
+        || "⚠️ Empty response from Groq",
       modelUsed: isPro ? "Echo Pro" : "Echo",
     };
 
