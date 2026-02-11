@@ -1,28 +1,30 @@
 import fetch from "node-fetch";
 
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+// ✅ ONLY VALID MODELS
+const MODEL_FREE = "llama-3.1-8b-instant";
+const MODEL_PRO  = "llama-3.3-70b-versatile";
+
 export async function getChatResponse(message, mode, isPro) {
   try {
-    const model = isPro
-      ? "llama-3.2-70b-chat"      // ✅ PRO (WORKING)
-      : "llama-3.1-8b-instant";  // ✅ FREE (SAFE FALLBACK)
+    const model = isPro ? MODEL_PRO : MODEL_FREE;
 
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: "You are Echo AI, a helpful assistant." },
-            { role: "user", content: message },
-          ],
-        }),
-      }
-    );
+    console.log("🔁 Using model:", model);
+
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: message }],
+        temperature: isPro ? 0.7 : 0.4,
+        max_tokens: isPro ? 1024 : 256,
+      }),
+    });
 
     const data = await response.json();
 
@@ -35,9 +37,12 @@ export async function getChatResponse(message, mode, isPro) {
       };
     }
 
+    const content =
+      data?.choices?.[0]?.message?.content ??
+      "⚠️ No response from Groq";
+
     return {
-      content: data.choices?.[0]?.message?.content?.trim()
-        || "⚠️ Empty response from Groq",
+      content,
       modelUsed: isPro ? "Echo Pro" : "Echo",
     };
 
