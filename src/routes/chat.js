@@ -1,6 +1,6 @@
 import express from "express";
 import { getChatResponseStream } from "../services/groq.js";
-import { getLiveContextIfNeeded } from "../services/retrieval.js";
+import { getLiveContextIfNeeded } from "../../utility/retrieval.js";
 
 const router = express.Router();
 
