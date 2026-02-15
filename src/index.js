@@ -9,14 +9,36 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+/* =========================================================
+   MIDDLEWARE
+========================================================= */
 
-// 🚨 THESE MUST RECEIVE FUNCTIONS
+// Enable CORS for all origins (you can restrict later)
+app.use(cors());
+
+// Parse JSON bodies (limit added for safety)
+app.use(express.json({ limit: "2mb" }));
+
+/* =========================================================
+   ROUTES
+========================================================= */
+
 app.use("/api/chat", chatRoute);
 app.use("/api/news", newsRoute);
 
-const PORT = process.env.PORT || 3000;
+/* =========================================================
+   HEALTH CHECK (IMPORTANT FOR RENDER)
+========================================================= */
+
+app.get("/", (req, res) => {
+  res.json({ status: "Echo backend running 🚀" });
+});
+
+/* =========================================================
+   SERVER START
+========================================================= */
+
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Echo backend running on port ${PORT}`);

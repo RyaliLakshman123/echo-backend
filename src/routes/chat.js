@@ -5,10 +5,11 @@ const router = express.Router();
 
 router.post("/", async (req, res) => {
   try {
-    const { message, mode, isPro, stream = true } = req.body;
+    const { messages, mode, isPro, stream = true } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
+    // ✅ Validate messages array
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Messages array is required" });
     }
 
     // 🔥 STREAMING MODE
@@ -16,39 +17,51 @@ router.post("/", async (req, res) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+      res.setHeader("X-Accel-Buffering", "no");
 
       try {
-        await getChatResponseStream(
-          message,
+        const result = await getChatResponseStream(
+          messages,
           mode,
           isPro,
           (chunk) => {
-            // Send each chunk as SSE
-            res.write(`data: ${JSON.stringify({ 
-              content: chunk, 
-              modelUsed: isPro ? "Echo Pro" : "Echo" 
-            })}\n\n`);
+            res.write(
+              `data: ${JSON.stringify({
+                content: chunk,
+                modelUsed: isPro ? "Echo Pro" : "Echo",
+              })}\n\n`
+            );
           }
         );
 
-        // Signal completion
+        // Send modelUsed at end
+        res.write(
+          `data: ${JSON.stringify({
+            modelUsed: result.modelUsed,
+          })}\n\n`
+        );
+
         res.write("data: [DONE]\n\n");
         res.end();
       } catch (error) {
         console.error("Streaming error:", error);
-        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({
+            error: error.message,
+          })}\n\n`
+        );
         res.end();
       }
-    } 
-    // ✅ NON-STREAMING MODE (backwards compatibility)
+    }
+
+    // ✅ NON-STREAMING (optional fallback)
     else {
-      const result = await getChatResponse(message, mode, isPro);
+      const result = await getChatResponse(messages, mode, isPro);
       res.json(result);
     }
 
   } catch (error) {
-    console.error("Chat error:", error);
+    console.error("Chat route error:", error);
     res.status(500).json({ error: "Chat service failed" });
   }
 });
