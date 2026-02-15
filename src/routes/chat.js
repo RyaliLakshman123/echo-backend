@@ -1,5 +1,6 @@
 import express from "express";
 import { getChatResponseStream } from "../services/groq.js";
+import { getLiveContextIfNeeded } from "../services/retrieval.js";
 
 const router = express.Router();
 
@@ -11,15 +12,31 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Messages array is required" });
     }
 
-    // 🔥 STREAMING ONLY (production)
+    // 🔥 STREAMING HEADERS
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
 
     try {
+      // 🔥 STEP 1 — Inject Live Retrieval (if needed)
+      let enhancedMessages = [...messages];
+
+      const liveContext = await getLiveContextIfNeeded(messages);
+
+      if (liveContext) {
+        enhancedMessages = [
+          {
+            role: "system",
+            content: liveContext,
+          },
+          ...messages,
+        ];
+      }
+
+      // 🔥 STEP 2 — Call Groq Streaming
       await getChatResponseStream(
-        messages,
+        enhancedMessages,
         mode,
         isPro,
         (chunk) => {
@@ -32,17 +49,22 @@ router.post("/", async (req, res) => {
         }
       );
 
+      // 🔥 STEP 3 — End Stream
       res.write("data: [DONE]\n\n");
       res.end();
+
     } catch (error) {
       console.error("Streaming error:", error);
+
       res.write(
         `data: ${JSON.stringify({
           error: error.message,
         })}\n\n`
       );
+
       res.end();
     }
+
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: "Chat service failed" });
