@@ -9,36 +9,18 @@ dotenv.config();
 
 const app = express();
 
-/* =========================================================
-   MIDDLEWARE
-========================================================= */
-
-// Enable CORS for all origins (you can restrict later)
 app.use(cors());
+app.use(express.json());
 
-// Parse JSON bodies (limit added for safety)
-app.use(express.json({ limit: "2mb" }));
-
-/* =========================================================
-   ROUTES
-========================================================= */
+// ✅ Health check endpoint (REQUIRED for Render)
+app.get("/", (req, res) => {
+  res.send("Echo backend is live 🚀");
+});
 
 app.use("/api/chat", chatRoute);
 app.use("/api/news", newsRoute);
 
-/* =========================================================
-   HEALTH CHECK (IMPORTANT FOR RENDER)
-========================================================= */
-
-app.get("/", (req, res) => {
-  res.json({ status: "Echo backend running 🚀" });
-});
-
-/* =========================================================
-   SERVER START
-========================================================= */
-
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Echo backend running on port ${PORT}`);
