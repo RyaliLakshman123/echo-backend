@@ -8,46 +8,30 @@ router.post("/", async (req, res) => {
     const { messages, mode, isPro, stream = true } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({
-        error: "Messages array is required"
-      });
+      return res.status(400).json({ error: "Messages array is required" });
     }
 
-    if (stream) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.flushHeaders();
+    // STREAMING MODE
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-      try {
-        await getChatResponseStream(
-          messages, // ✅ FULL MEMORY ARRAY
-          mode,
-          isPro,
-          (chunk) => {
-            res.write(
-              `data: ${JSON.stringify({
-                content: chunk,
-                modelUsed: isPro ? "Echo Pro" : "Echo"
-              })}\n\n`
-            );
-          }
-        );
-
-        res.write("data: [DONE]\n\n");
-        res.end();
-      } catch (error) {
-        console.error("Streaming error:", error);
+    await getChatResponseStream(
+      messages,
+      mode,
+      isPro,
+      (chunk) => {
         res.write(
-          `data: ${JSON.stringify({ error: error.message })}\n\n`
+          `data: ${JSON.stringify({
+            content: chunk,
+            modelUsed: isPro ? "Echo Pro" : "Echo"
+          })}\n\n`
         );
-        res.end();
       }
-    } else {
-      return res.status(400).json({
-        error: "Non-streaming mode disabled"
-      });
-    }
+    );
+
+    res.write("data: [DONE]\n\n");
+    res.end();
 
   } catch (error) {
     console.error("Chat error:", error);
