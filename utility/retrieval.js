@@ -15,39 +15,40 @@ export async function getLiveContextIfNeeded(messages) {
   try {
 
     // ====================================================
-    // 📈 STOCKS — FIXED DETECTION (THIS WAS THE PROBLEM)
+    // 📈 STOCKS — FIXED PROPERLY
     // ====================================================
-    if (
-      containsAny(lower, ["stock", "share", "price"]) ||
-      /\b[A-Z]{2,5}\b/.test(lastMessage)
-    ) {
+    const stockKeywords = ["stock", "share"];
+    const hasStockKeyword = containsAny(lower, stockKeywords);
 
-      let symbol = null;
+    const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
 
-      const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
-      if (tickerMatch) symbol = tickerMatch[0];
+    const companyMap = {
+      apple: "AAPL",
+      tesla: "TSLA",
+      microsoft: "MSFT",
+      nvidia: "NVDA",
+      google: "GOOGL",
+      amazon: "AMZN",
+      meta: "META",
+      netflix: "NFLX"
+    };
 
-      const companyMap = {
-        apple: "AAPL",
-        tesla: "TSLA",
-        microsoft: "MSFT",
-        nvidia: "NVDA",
-        google: "GOOGL",
-        amazon: "AMZN",
-        meta: "META",
-        netflix: "NFLX"
-      };
+    let symbol = null;
 
-      if (!symbol) {
-        for (const name in companyMap) {
-          if (lower.includes(name)) {
-            symbol = companyMap[name];
-            break;
-          }
+    if (tickerMatch) {
+      symbol = tickerMatch[0];
+    } else {
+      for (const name in companyMap) {
+        if (lower.includes(name)) {
+          symbol = companyMap[name];
+          break;
         }
       }
+    }
 
-      if (!symbol) return { type: "none" };
+    // Only trigger stock API if we detected symbol
+    // AND user actually mentioned stock/share
+    if (symbol && hasStockKeyword) {
 
       const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`);
       const data = await res.json();
@@ -63,7 +64,7 @@ export async function getLiveContextIfNeeded(messages) {
     }
 
     // ====================================================
-    // ₿ CRYPTO (WORKING — UNCHANGED)
+    // ₿ CRYPTO (WORKING — UNTOUCHED)
     // ====================================================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth"])) {
 
@@ -87,7 +88,7 @@ Ethereum: $${eth ?? "N/A"}`
     }
 
     // ====================================================
-    // 📰 NEWS — FIXED DETECTION
+    // 📰 NEWS (UNCHANGED)
     // ====================================================
     if (containsAny(lower, ["news", "latest", "today", "happened"])) {
 
