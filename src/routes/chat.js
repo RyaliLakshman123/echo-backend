@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post("/", async (req, res) => {
   try {
-    const { messages, mode, isPro, stream = true } = req.body;
+    const { messages, mode, isPro } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "Messages array is required" });
@@ -18,56 +18,66 @@ router.post("/", async (req, res) => {
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
 
-    try {
-      // 🔥 STEP 1 — Inject Live Retrieval (if needed)
-      let enhancedMessages = [...messages];
+    // 🔥 STEP 1 — Hybrid Retrieval
+    const liveResult = await getLiveContextIfNeeded(messages);
 
-      const liveContext = await getLiveContextIfNeeded(messages);
-
-      if (liveContext) {
-        enhancedMessages = [
-          {
-            role: "system",
-            content: liveContext,
-          },
-          ...messages,
-        ];
-      }
-console.log("📨 Final Messages Sent To Groq:", enhancedMessages);
-      // 🔥 STEP 2 — Call Groq Streaming
-      await getChatResponseStream(
-        enhancedMessages,
-        mode,
-        isPro,
-        (chunk) => {
-          res.write(
-            `data: ${JSON.stringify({
-              content: chunk,
-              modelUsed: isPro ? "Echo Pro" : "Echo",
-            })}\n\n`
-          );
-        }
-      );
-
-      // 🔥 STEP 3 — End Stream
-      res.write("data: [DONE]\n\n");
-      res.end();
-
-    } catch (error) {
-      console.error("Streaming error:", error);
-
+    // ========================================
+    // ✅ DIRECT DATA (Stocks / Crypto)
+    // ========================================
+    if (liveResult.type === "direct") {
       res.write(
         `data: ${JSON.stringify({
-          error: error.message,
+          content: liveResult.content,
+          modelUsed: "Live Data"
         })}\n\n`
       );
-
-      res.end();
+      res.write("data: [DONE]\n\n");
+      return res.end();
     }
 
+    // ========================================
+    // ✅ INJECT DATA (News)
+    // ========================================
+    let enhancedMessages = [...messages];
+
+    if (liveResult.type === "inject") {
+      enhancedMessages = [
+        {
+          role: "system",
+          content: liveResult.content, // ✅ STRING ONLY
+        },
+        ...messages,
+      ];
+    }
+
+    console.log("📨 Final Messages Sent To Groq:", enhancedMessages);
+
+    // 🔥 STEP 2 — Stream Groq
+    await getChatResponseStream(
+      enhancedMessages,
+      mode,
+      isPro,
+      (chunk) => {
+        res.write(
+          `data: ${JSON.stringify({
+            content: chunk,
+            modelUsed: isPro ? "Echo Pro" : "Echo",
+          })}\n\n`
+        );
+      }
+    );
+
+    res.write("data: [DONE]\n\n");
+    res.end();
+
   } catch (error) {
-    console.error("Chat error:", error);
-    res.status(500).json({ error: "Chat service failed" });
+    console.error("Streaming error:", error);
+    res.write(
+      `data: ${JSON.stringify({
+        error: error.message,
+      })}\n\n`
+    );
+    res.end();
   }
 });
 
