@@ -1,9 +1,9 @@
 const GNEWS_URL = "https://gnews.io/api/v4/search";
-const ALPHA_URL = "https://www.alphavantage.co/query";
 const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
+const YAHOO_FINANCE_URL = "https://query1.finance.yahoo.com/v7/finance/quote";
 
 function containsAny(text, words) {
-  return words.some(word => text.toLowerCase().includes(word));
+  return words.some(word => text.includes(word));
 }
 
 export async function getLiveContextIfNeeded(messages) {
@@ -14,16 +14,18 @@ export async function getLiveContextIfNeeded(messages) {
 
   try {
 
-    // =========================
-    // 📈 STOCKS
-    // =========================
+    // ====================================================
+    // 📈 STOCKS — Yahoo Finance (No API Key Needed)
+    // ====================================================
     if (containsAny(lower, ["stock", "share price"])) {
 
       let symbol = null;
 
+      // Try ticker detection
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
       if (tickerMatch) symbol = tickerMatch[0];
 
+      // Company mapping
       const companyMap = {
         apple: "AAPL",
         tesla: "TSLA",
@@ -47,13 +49,18 @@ export async function getLiveContextIfNeeded(messages) {
       if (!symbol) return { type: "none" };
 
       const res = await fetch(
-        `${ALPHA_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${process.env.ALPHA_VANTAGE_KEY}`
+        `${YAHOO_FINANCE_URL}?symbols=${symbol}`
       );
 
       const data = await res.json();
-      const price = data["Global Quote"]?.["05. price"];
 
-      if (!price) return { type: "none" };
+      const price =
+        data?.quoteResponse?.result?.[0]?.regularMarketPrice;
+
+      if (!price) {
+        console.log("Yahoo Finance response:", data);
+        return { type: "none" };
+      }
 
       return {
         type: "direct",
@@ -61,9 +68,9 @@ export async function getLiveContextIfNeeded(messages) {
       };
     }
 
-    // =========================
-    // ₿ CRYPTO
-    // =========================
+    // ====================================================
+    // ₿ CRYPTO — CoinGecko
+    // ====================================================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto"])) {
 
       const res = await fetch(
@@ -72,17 +79,25 @@ export async function getLiveContextIfNeeded(messages) {
 
       const data = await res.json();
 
+      const btc = data?.bitcoin?.usd;
+      const eth = data?.ethereum?.usd;
+
+      if (!btc && !eth) {
+        console.log("CoinGecko response:", data);
+        return { type: "none" };
+      }
+
       return {
         type: "direct",
         content: `₿ Live crypto prices:
-Bitcoin: $${data.bitcoin?.usd}
-Ethereum: $${data.ethereum?.usd}`
+Bitcoin: $${btc ?? "N/A"}
+Ethereum: $${eth ?? "N/A"}`
       };
     }
 
-    // =========================
-    // 📰 NEWS
-    // =========================
+    // ====================================================
+    // 📰 NEWS — Inject into LLM
+    // ====================================================
     if (containsAny(lower, ["news", "latest", "today"])) {
 
       const res = await fetch(
@@ -90,6 +105,7 @@ Ethereum: $${data.ethereum?.usd}`
       );
 
       const data = await res.json();
+
       if (!data.articles || data.articles.length === 0)
         return { type: "none" };
 
@@ -101,7 +117,7 @@ Source: ${a.source.name}`
 
       return {
         type: "inject",
-        content: `Here are the latest news results:\n\n${formatted}`
+        content: `Here are the latest verified news results:\n\n${formatted}`
       };
     }
 
