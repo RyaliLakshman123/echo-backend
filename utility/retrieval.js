@@ -1,6 +1,7 @@
 const GNEWS_URL = "https://gnews.io/api/v4/search";
 const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
 const YAHOO_FINANCE_URL = "https://query1.finance.yahoo.com/v7/finance/quote";
+const TMDB_URL = "https://api.themoviedb.org/3/search/movie";
 
 function containsAny(text, words) {
   return words.some(word => text.toLowerCase().includes(word.toLowerCase()));
@@ -17,6 +18,92 @@ export async function getLiveContextIfNeeded(messages) {
   try {
 
     // =========================
+    // 🎬 MOVIES
+    // =========================
+    if (containsAny(lower, ["movie", "film", "release", "doom", "doomsday", "marvel", "trailer", "cinema"])) {
+
+      console.log("🎬 Movie detection triggered");
+
+      // Extract movie name from query
+      let movieName = lastMessage
+        .replace(/when|will|be|released|movie|film|release|date|about|the/gi, '')
+        .trim();
+
+      // Handle specific cases
+      if (lower.includes("doom") || lower.includes("doomsday")) {
+        movieName = "doom";
+      }
+
+      if (!movieName || movieName.length < 2) {
+        console.log("❌ No movie name detected");
+        return { type: "none" };
+      }
+
+      console.log("🎬 Searching for movie:", movieName);
+
+      // Using TMDB API (Free - just needs API key)
+      // Get your free API key from: https://www.themoviedb.org/settings/api
+      const tmdbApiKey = process.env.TMDB_API_KEY;
+
+      if (!tmdbApiKey) {
+        console.log("❌ TMDB_API_KEY not configured");
+        return { type: "none" };
+      }
+
+      const res = await fetch(
+        `${TMDB_URL}?api_key=${tmdbApiKey}&query=${encodeURIComponent(movieName)}&include_adult=false`
+      );
+
+      if (!res.ok) {
+        console.log("❌ TMDB API error:", res.status);
+        return { type: "none" };
+      }
+
+      const data = await res.json();
+
+      console.log("🎬 TMDB Response:", JSON.stringify(data, null, 2));
+
+      if (!data.results || data.results.length === 0) {
+        return {
+          type: "direct",
+          content: `🎬 No movie found matching "${movieName}". Try being more specific with the movie title.`
+        };
+      }
+
+      // Get top 3 results
+      const movies = data.results.slice(0, 3).map(movie => {
+        const releaseDate = movie.release_date 
+          ? new Date(movie.release_date).toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })
+          : "Release date not announced";
+        
+        const status = movie.release_date 
+          ? new Date(movie.release_date) > new Date() 
+            ? "📅 Upcoming" 
+            : "✅ Released"
+          : "⏳ TBA";
+
+        return `**${movie.title}** (${movie.release_date ? new Date(movie.release_date).getFullYear() : 'TBA'})
+${status}: ${releaseDate}
+⭐ Rating: ${movie.vote_average}/10
+📝 ${movie.overview || 'No description available'}`;
+      }).join("\n\n---\n\n");
+
+      return {
+        type: "direct",
+        content: `🎬 **Movie Search Results**
+
+${movies}
+
+⏰ Last Updated: ${new Date().toLocaleString()}
+*Data provided by The Movie Database (TMDB)*`
+      };
+    }
+
+    // =========================
     // 📈 STOCKS
     // =========================
     if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
@@ -25,11 +112,9 @@ export async function getLiveContextIfNeeded(messages) {
 
       let symbol = null;
 
-      // Try to find ticker symbol (2-5 uppercase letters)
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
       if (tickerMatch) symbol = tickerMatch[0];
 
-      // Company name mapping
       const companyMap = {
         apple: "AAPL",
         tesla: "TSLA",
@@ -48,7 +133,6 @@ export async function getLiveContextIfNeeded(messages) {
         nflx: "NFLX"
       };
 
-      // Try to find company name if no ticker found
       if (!symbol) {
         for (const [name, ticker] of Object.entries(companyMap)) {
           if (lower.includes(name)) {
