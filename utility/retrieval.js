@@ -12,20 +12,22 @@ export async function getLiveContextIfNeeded(messages) {
 
   const lower = lastMessage.toLowerCase();
 
+  console.log("🔍 Retrieval triggered for:", lower);
+
   try {
 
-    // ====================================================
-    // 📈 STOCKS — Yahoo Finance (No API Key Needed)
-    // ====================================================
-    if (containsAny(lower, ["stock", "share price"])) {
+    // =========================
+    // 📈 STOCKS
+    // =========================
+    if (containsAny(lower, ["stock", "share"])) {
+
+      console.log("📈 Stock detection triggered");
 
       let symbol = null;
 
-      // Try ticker detection
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
       if (tickerMatch) symbol = tickerMatch[0];
 
-      // Company mapping
       const companyMap = {
         apple: "AAPL",
         tesla: "TSLA",
@@ -46,19 +48,22 @@ export async function getLiveContextIfNeeded(messages) {
         }
       }
 
-      if (!symbol) return { type: "none" };
+      if (!symbol) {
+        console.log("❌ No stock symbol detected");
+        return { type: "none" };
+      }
 
-      const res = await fetch(
-        `${YAHOO_FINANCE_URL}?symbols=${symbol}`
-      );
+      console.log("📊 Fetching stock for:", symbol);
 
+      const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`);
       const data = await res.json();
 
-      const price =
-        data?.quoteResponse?.result?.[0]?.regularMarketPrice;
+      console.log("📊 Yahoo response:", data);
+
+      const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
 
       if (!price) {
-        console.log("Yahoo Finance response:", data);
+        console.log("❌ No price found");
         return { type: "none" };
       }
 
@@ -68,10 +73,12 @@ export async function getLiveContextIfNeeded(messages) {
       };
     }
 
-    // ====================================================
-    // ₿ CRYPTO — CoinGecko
-    // ====================================================
-    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto"])) {
+    // =========================
+    // ₿ CRYPTO
+    // =========================
+    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth"])) {
+
+      console.log("₿ Crypto detection triggered");
 
       const res = await fetch(
         `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
@@ -79,11 +86,13 @@ export async function getLiveContextIfNeeded(messages) {
 
       const data = await res.json();
 
+      console.log("₿ CoinGecko response:", data);
+
       const btc = data?.bitcoin?.usd;
       const eth = data?.ethereum?.usd;
 
       if (!btc && !eth) {
-        console.log("CoinGecko response:", data);
+        console.log("❌ No crypto price found");
         return { type: "none" };
       }
 
@@ -95,16 +104,20 @@ Ethereum: $${eth ?? "N/A"}`
       };
     }
 
-    // ====================================================
-    // 📰 NEWS — Inject into LLM
-    // ====================================================
+    // =========================
+    // 📰 NEWS
+    // =========================
     if (containsAny(lower, ["news", "latest", "today"])) {
+
+      console.log("📰 News detection triggered");
 
       const res = await fetch(
         `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
       );
 
       const data = await res.json();
+
+      console.log("📰 GNews response:", data);
 
       if (!data.articles || data.articles.length === 0)
         return { type: "none" };
@@ -124,7 +137,7 @@ Source: ${a.source.name}`
     return { type: "none" };
 
   } catch (error) {
-    console.error("Hybrid retrieval error:", error.message);
+    console.error("🔥 Retrieval error:", error.message);
     return { type: "none" };
   }
 }
