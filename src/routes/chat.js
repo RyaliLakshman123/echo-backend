@@ -33,7 +33,7 @@ router.post("/", async (req, res) => {
           ...messages,
         ];
       }
-
+console.log("📨 Final Messages Sent To Groq:", enhancedMessages);
       // 🔥 STEP 2 — Call Groq Streaming
       await getChatResponseStream(
         enhancedMessages,
