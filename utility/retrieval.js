@@ -13,36 +13,43 @@ export async function getLiveContextIfNeeded(messages) {
 
   const lower = lastMessage.toLowerCase();
 
-  console.log("🔍 Retrieval triggered for:", lower);
+  console.log("🔍 ========================================");
+  console.log("🔍 RETRIEVAL FUNCTION CALLED!");
+  console.log("🔍 User message:", lastMessage);
+  console.log("🔍 Lowercase:", lower);
+  console.log("🔍 ========================================");
 
   try {
 
     // =========================
     // 🎬 MOVIES
     // =========================
-    if (containsAny(lower, ["movie", "film", "release", "doom", "doomsday", "marvel", "trailer", "cinema"])) {
+    if (containsAny(lower, ["movie", "film", "release", "doom", "doomsday", "marvel", "trailer", "cinema", "frankenstein"])) {
 
-      console.log("🎬 Movie detection triggered");
+      console.log("🎬 ========================================");
+      console.log("🎬 MOVIE DETECTION TRIGGERED!");
+      console.log("🎬 ========================================");
 
-      // Extract movie name from query
+      // Extract movie name from query - improved parsing
       let movieName = lastMessage
-        .replace(/when|will|be|released|movie|film|release|date|about|the/gi, '')
+        .replace(/when|will|be|released|movie|film|release|date|about|the|tell|me|it|is/gi, '')
+        .replace(/\s+/g, ' ')
         .trim();
 
       // Handle specific cases
-      if (lower.includes("doom") || lower.includes("doomsday")) {
+      if (lower.includes("doom's day") || lower.includes("doomsday")) {
+        movieName = "doomsday";
+      } else if (lower.includes("doom")) {
         movieName = "doom";
       }
+
+      console.log("🎬 Extracted movie name:", movieName);
 
       if (!movieName || movieName.length < 2) {
         console.log("❌ No movie name detected");
         return { type: "none" };
       }
 
-      console.log("🎬 Searching for movie:", movieName);
-
-      // Using TMDB API (Free - just needs API key)
-      // Get your free API key from: https://www.themoviedb.org/settings/api
       const tmdbApiKey = process.env.TMDB_API_KEY;
 
       if (!tmdbApiKey) {
@@ -61,7 +68,7 @@ export async function getLiveContextIfNeeded(messages) {
 
       const data = await res.json();
 
-      console.log("🎬 TMDB Response:", JSON.stringify(data, null, 2));
+      console.log("🎬 TMDB found", data.results?.length || 0, "results");
 
       if (!data.results || data.results.length === 0) {
         return {
@@ -70,7 +77,6 @@ export async function getLiveContextIfNeeded(messages) {
         };
       }
 
-      // Get top 3 results
       const movies = data.results.slice(0, 3).map(movie => {
         const releaseDate = movie.release_date 
           ? new Date(movie.release_date).toLocaleDateString('en-US', { 
@@ -94,7 +100,7 @@ ${status}: ${releaseDate}
 
       return {
         type: "direct",
-        content: `🎬 **Movie Search Results**
+        content: `🎬 **Movie Search Results for "${movieName}"**
 
 ${movies}
 
@@ -108,12 +114,17 @@ ${movies}
     // =========================
     if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
 
-      console.log("📈 Stock detection triggered");
+      console.log("📈 ========================================");
+      console.log("📈 STOCK DETECTION TRIGGERED!");
+      console.log("📈 ========================================");
 
       let symbol = null;
 
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
-      if (tickerMatch) symbol = tickerMatch[0];
+      if (tickerMatch) {
+        symbol = tickerMatch[0];
+        console.log("📈 Found ticker from uppercase:", symbol);
+      }
 
       const companyMap = {
         apple: "AAPL",
@@ -137,6 +148,7 @@ ${movies}
         for (const [name, ticker] of Object.entries(companyMap)) {
           if (lower.includes(name)) {
             symbol = ticker;
+            console.log("📈 Found ticker from company name:", name, "->", symbol);
             break;
           }
         }
@@ -155,6 +167,8 @@ ${movies}
         }
       });
       
+      console.log("📊 Yahoo Finance response status:", res.status);
+
       if (!res.ok) {
         console.log("❌ Yahoo Finance API error:", res.status);
         return { type: "none" };
@@ -173,6 +187,8 @@ ${movies}
         console.log("❌ No price found in response");
         return { type: "none" };
       }
+
+      console.log("✅ Stock price found:", price);
 
       const changeSymbol = change >= 0 ? "+" : "";
       const changeEmoji = change >= 0 ? "📈" : "📉";
@@ -195,11 +211,15 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
     // =========================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency"])) {
 
-      console.log("₿ Crypto detection triggered");
+      console.log("₿ ========================================");
+      console.log("₿ CRYPTO DETECTION TRIGGERED!");
+      console.log("₿ ========================================");
 
       const res = await fetch(
         `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
       );
+
+      console.log("₿ CoinGecko response status:", res.status);
 
       if (!res.ok) {
         console.log("❌ CoinGecko API error:", res.status);
@@ -218,6 +238,8 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
         return { type: "none" };
       }
 
+      console.log("✅ Crypto prices found - BTC:", btc, "ETH:", eth);
+
       let content = "₿ **Live Cryptocurrency Prices**\n\n";
       if (btc) content += `🟠 **Bitcoin (BTC)**: $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
       if (eth) content += `🔷 **Ethereum (ETH)**: $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
@@ -234,7 +256,9 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
     // =========================
     if (containsAny(lower, ["news", "latest", "today", "headlines", "recent"])) {
 
-      console.log("📰 News detection triggered");
+      console.log("📰 ========================================");
+      console.log("📰 NEWS DETECTION TRIGGERED!");
+      console.log("📰 ========================================");
 
       if (!process.env.GNEWS_API_KEY) {
         console.log("❌ GNEWS_API_KEY not configured");
@@ -255,6 +279,8 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
         `${GNEWS_URL}?q=${encodeURIComponent(searchQuery)}&lang=en&max=5&apikey=${process.env.GNEWS_API_KEY}`
       );
 
+      console.log("📰 GNews response status:", res.status);
+
       if (!res.ok) {
         console.log("❌ GNews API error:", res.status);
         const errorText = await res.text();
@@ -264,7 +290,7 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
 
       const data = await res.json();
       
-      console.log("📰 GNews Response:", JSON.stringify(data, null, 2));
+      console.log("📰 GNews found", data.articles?.length || 0, "articles");
 
       if (!data.articles || data.articles.length === 0) {
         console.log("❌ No articles found");
@@ -293,8 +319,11 @@ ${formatted}
     return { type: "none" };
 
   } catch (error) {
-    console.error("🔥 Retrieval error:", error.message);
+    console.error("🔥 ========================================");
+    console.error("🔥 RETRIEVAL ERROR!");
+    console.error("🔥 Error message:", error.message);
     console.error("🔥 Stack trace:", error.stack);
+    console.error("🔥 ========================================");
     return { type: "none" };
   }
 }
