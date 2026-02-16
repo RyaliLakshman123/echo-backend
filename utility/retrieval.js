@@ -1,7 +1,6 @@
 const GNEWS_URL = "https://gnews.io/api/v4/search";
 const ALPHA_URL = "https://www.alphavantage.co/query";
 const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
-const WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 
 function containsAny(text, words) {
   return words.some(word => text.toLowerCase().includes(word));
@@ -9,60 +8,30 @@ function containsAny(text, words) {
 
 export async function getLiveContextIfNeeded(messages) {
   const lastMessage = messages[messages.length - 1]?.content;
-  if (!lastMessage) return null;
+  if (!lastMessage) return { type: "none" };
 
   const lower = lastMessage.toLowerCase();
 
   try {
 
     // =========================
-    // 📰 NEWS
-    // =========================
-    if (containsAny(lower, ["news", "latest", "today"])) {
-
-      const res = await fetch(
-        `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
-      );
-
-      if (!res.ok) {
-        console.error("GNews error:", res.status);
-        return null;
-      }
-
-      const data = await res.json();
-      if (!data.articles || data.articles.length === 0) return null;
-
-      const formatted = data.articles.map(a =>
-        `Title: ${a.title}
-Date: ${a.publishedAt}
-Source: ${a.source.name}`
-      ).join("\n\n");
-
-      return `Here are the latest news results:\n\n${formatted}`;
-    }
-
-
-    // =========================
-    // 📈 STOCKS
+    // 📈 STOCKS (DIRECT RETURN)
     // =========================
     if (containsAny(lower, ["stock", "share price"])) {
 
       let symbol = null;
 
-      // Try uppercase ticker first (AAPL, TSLA, etc.)
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
       if (tickerMatch) {
         symbol = tickerMatch[0];
       }
 
-      // Company name mapping
       const companyMap = {
         apple: "AAPL",
         tesla: "TSLA",
         microsoft: "MSFT",
         nvidia: "NVDA",
         google: "GOOGL",
-        alphabet: "GOOGL",
         amazon: "AMZN",
         meta: "META",
         netflix: "NFLX"
@@ -77,31 +46,25 @@ Source: ${a.source.name}`
         }
       }
 
-      if (!symbol) return null;
+      if (!symbol) return { type: "none" };
 
       const res = await fetch(
         `${ALPHA_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${process.env.ALPHA_VANTAGE_KEY}`
       );
 
-      if (!res.ok) {
-        console.error("Alpha Vantage error:", res.status);
-        return null;
-      }
-
       const data = await res.json();
       const price = data["Global Quote"]?.["05. price"];
 
-      if (!price) {
-        console.error("Alpha returned no price:", data);
-        return null;
-      }
+      if (!price) return { type: "none" };
 
-      return `Live stock price for ${symbol} is $${price}`;
+      return {
+        type: "direct",
+        content: `📈 Live stock price for ${symbol} is $${price}`
+      };
     }
 
-
     // =========================
-    // ₿ CRYPTO
+    // ₿ CRYPTO (DIRECT RETURN)
     // =========================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto"])) {
 
@@ -109,38 +72,45 @@ Source: ${a.source.name}`
         `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
       );
 
-      if (!res.ok) {
-        console.error("CoinGecko error:", res.status);
-        return null;
-      }
-
       const data = await res.json();
 
-      return `Live crypto prices:
+      return {
+        type: "direct",
+        content: `₿ Live crypto prices:
 Bitcoin: $${data.bitcoin?.usd}
-Ethereum: $${data.ethereum?.usd}`;
+Ethereum: $${data.ethereum?.usd}`
+      };
     }
 
-
     // =========================
-    // 🌍 WIKIPEDIA (fallback)
+    // 📰 NEWS (INJECT INTO LLM)
     // =========================
-    const topic = lastMessage.split(" ").slice(-1)[0];
+    if (containsAny(lower, ["news", "latest", "today"])) {
 
-    const wikiRes = await fetch(WIKI_URL + encodeURIComponent(topic));
+      const res = await fetch(
+        `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
+      );
 
-    if (wikiRes.ok) {
-      const wikiData = await wikiRes.json();
+      const data = await res.json();
+      if (!data.articles || data.articles.length === 0)
+        return { type: "none" };
 
-      if (wikiData.extract) {
-        return `Wikipedia summary:\n${wikiData.extract}`;
-      }
+      const formatted = data.articles.map(a =>
+        `Title: ${a.title}
+Date: ${a.publishedAt}
+Source: ${a.source.name}`
+      ).join("\n\n");
+
+      return {
+        type: "inject",
+        content: `Here are the latest news results:\n\n${formatted}`
+      };
     }
 
-    return null;
+    return { type: "none" };
 
   } catch (error) {
     console.error("Hybrid retrieval error:", error.message);
-    return null;
+    return { type: "none" };
   }
 }
