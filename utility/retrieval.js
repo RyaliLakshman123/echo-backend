@@ -12,50 +12,60 @@ export async function getLiveContextIfNeeded(messages) {
 
   const lower = lastMessage.toLowerCase();
 
+  console.log("🔍 Retrieval triggered for:", lower);
+
   try {
 
-    // ====================================================
-    // 📈 STOCKS — FIXED PROPERLY
-    // ====================================================
-    const stockKeywords = ["stock", "share"];
-    const hasStockKeyword = containsAny(lower, stockKeywords);
+    // =========================
+    // 📈 STOCKS
+    // =========================
+    if (containsAny(lower, ["stock", "share"])) {
 
-    const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
+      console.log("📈 Stock detection triggered");
 
-    const companyMap = {
-      apple: "AAPL",
-      tesla: "TSLA",
-      microsoft: "MSFT",
-      nvidia: "NVDA",
-      google: "GOOGL",
-      amazon: "AMZN",
-      meta: "META",
-      netflix: "NFLX"
-    };
+      let symbol = null;
 
-    let symbol = null;
+      const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
+      if (tickerMatch) symbol = tickerMatch[0];
 
-    if (tickerMatch) {
-      symbol = tickerMatch[0];
-    } else {
-      for (const name in companyMap) {
-        if (lower.includes(name)) {
-          symbol = companyMap[name];
-          break;
+      const companyMap = {
+        apple: "AAPL",
+        tesla: "TSLA",
+        microsoft: "MSFT",
+        nvidia: "NVDA",
+        google: "GOOGL",
+        amazon: "AMZN",
+        meta: "META",
+        netflix: "NFLX"
+      };
+
+      if (!symbol) {
+        for (const name in companyMap) {
+          if (lower.includes(name)) {
+            symbol = companyMap[name];
+            break;
+          }
         }
       }
-    }
 
-    // Only trigger stock API if we detected symbol
-    // AND user actually mentioned stock/share
-    if (symbol && hasStockKeyword) {
+      if (!symbol) {
+        console.log("❌ No stock symbol detected");
+        return { type: "none" };
+      }
+
+      console.log("📊 Fetching stock for:", symbol);
 
       const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`);
       const data = await res.json();
 
+      console.log("📊 Yahoo response:", data);
+
       const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
 
-      if (!price) return { type: "none" };
+      if (!price) {
+        console.log("❌ No price found");
+        return { type: "none" };
+      }
 
       return {
         type: "direct",
@@ -63,10 +73,12 @@ export async function getLiveContextIfNeeded(messages) {
       };
     }
 
-    // ====================================================
-    // ₿ CRYPTO (WORKING — UNTOUCHED)
-    // ====================================================
+    // =========================
+    // ₿ CRYPTO
+    // =========================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth"])) {
+
+      console.log("₿ Crypto detection triggered");
 
       const res = await fetch(
         `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
@@ -74,10 +86,15 @@ export async function getLiveContextIfNeeded(messages) {
 
       const data = await res.json();
 
+      console.log("₿ CoinGecko response:", data);
+
       const btc = data?.bitcoin?.usd;
       const eth = data?.ethereum?.usd;
 
-      if (!btc && !eth) return { type: "none" };
+      if (!btc && !eth) {
+        console.log("❌ No crypto price found");
+        return { type: "none" };
+      }
 
       return {
         type: "direct",
@@ -87,16 +104,20 @@ Ethereum: $${eth ?? "N/A"}`
       };
     }
 
-    // ====================================================
-    // 📰 NEWS (UNCHANGED)
-    // ====================================================
-    if (containsAny(lower, ["news", "latest", "today", "happened"])) {
+    // =========================
+    // 📰 NEWS
+    // =========================
+    if (containsAny(lower, ["news", "latest", "today"])) {
+
+      console.log("📰 News detection triggered");
 
       const res = await fetch(
         `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
       );
 
       const data = await res.json();
+
+      console.log("📰 GNews response:", data);
 
       if (!data.articles || data.articles.length === 0)
         return { type: "none" };
@@ -116,7 +137,7 @@ Source: ${a.source.name}`
     return { type: "none" };
 
   } catch (error) {
-    console.error("Hybrid retrieval error:", error.message);
+    console.error("🔥 Retrieval error:", error.message);
     return { type: "none" };
   }
 }
