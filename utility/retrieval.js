@@ -1,6 +1,6 @@
 const GNEWS_URL = "https://gnews.io/api/v4/search";
 const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
-const YAHOO_FINANCE_URL = "https://query1.finance.yahoo.com/v7/finance/quote";
+const FINNHUB_URL = "https://finnhub.io/api/v1/quote"; // FREE Stock API
 const TMDB_URL = "https://api.themoviedb.org/3/search/movie";
 
 function containsAny(text, words) {
@@ -16,7 +16,6 @@ export async function getLiveContextIfNeeded(messages) {
   console.log("🔍 ========================================");
   console.log("🔍 RETRIEVAL FUNCTION CALLED!");
   console.log("🔍 User message:", lastMessage);
-  console.log("🔍 Lowercase:", lower);
   console.log("🔍 ========================================");
 
   try {
@@ -26,24 +25,18 @@ export async function getLiveContextIfNeeded(messages) {
     // =========================
     if (containsAny(lower, ["movie", "film", "release", "doom", "doomsday", "marvel", "trailer", "cinema", "frankenstein"])) {
 
-      console.log("🎬 ========================================");
       console.log("🎬 MOVIE DETECTION TRIGGERED!");
-      console.log("🎬 ========================================");
 
-      // Extract movie name from query - improved parsing
       let movieName = lastMessage
         .replace(/when|will|be|released|movie|film|release|date|about|the|tell|me|it|is/gi, '')
         .replace(/\s+/g, ' ')
         .trim();
 
-      // Handle specific cases
       if (lower.includes("doom's day") || lower.includes("doomsday")) {
         movieName = "doomsday";
       } else if (lower.includes("doom")) {
         movieName = "doom";
       }
-
-      console.log("🎬 Extracted movie name:", movieName);
 
       if (!movieName || movieName.length < 2) {
         console.log("❌ No movie name detected");
@@ -68,12 +61,10 @@ export async function getLiveContextIfNeeded(messages) {
 
       const data = await res.json();
 
-      console.log("🎬 TMDB found", data.results?.length || 0, "results");
-
       if (!data.results || data.results.length === 0) {
         return {
           type: "direct",
-          content: `🎬 No movie found matching "${movieName}". Try being more specific with the movie title.`
+          content: `🎬 No movie found matching "${movieName}". Try being more specific.`
         };
       }
 
@@ -105,25 +96,23 @@ ${status}: ${releaseDate}
 ${movies}
 
 ⏰ Last Updated: ${new Date().toLocaleString()}
-*Data provided by The Movie Database (TMDB)*`
+*Data from The Movie Database (TMDB)*`
       };
     }
 
     // =========================
-    // 📈 STOCKS
+    // 📈 STOCKS (Using Finnhub - FREE!)
     // =========================
     if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
 
-      console.log("📈 ========================================");
       console.log("📈 STOCK DETECTION TRIGGERED!");
-      console.log("📈 ========================================");
 
       let symbol = null;
 
       const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
       if (tickerMatch) {
         symbol = tickerMatch[0];
-        console.log("📈 Found ticker from uppercase:", symbol);
+        console.log("📈 Found ticker:", symbol);
       }
 
       const companyMap = {
@@ -148,7 +137,7 @@ ${movies}
         for (const [name, ticker] of Object.entries(companyMap)) {
           if (lower.includes(name)) {
             symbol = ticker;
-            console.log("📈 Found ticker from company name:", name, "->", symbol);
+            console.log("📈 Found ticker from name:", ticker);
             break;
           }
         }
@@ -159,31 +148,37 @@ ${movies}
         return { type: "none" };
       }
 
+      const finnhubApiKey = process.env.FINNHUB_API_KEY;
+
+      if (!finnhubApiKey) {
+        console.log("❌ FINNHUB_API_KEY not configured");
+        return { type: "none" };
+      }
+
       console.log("📊 Fetching stock for:", symbol);
 
-      const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
+      const res = await fetch(`${FINNHUB_URL}?symbol=${symbol}&token=${finnhubApiKey}`);
       
-      console.log("📊 Yahoo Finance response status:", res.status);
+      console.log("📊 Finnhub response status:", res.status);
 
       if (!res.ok) {
-        console.log("❌ Yahoo Finance API error:", res.status);
+        console.log("❌ Finnhub API error:", res.status);
         return { type: "none" };
       }
 
       const data = await res.json();
       
-      console.log("📊 Yahoo Finance Response:", JSON.stringify(data, null, 2));
+      console.log("📊 Finnhub Response:", JSON.stringify(data, null, 2));
 
-      const quote = data?.quoteResponse?.result?.[0];
-      const price = quote?.regularMarketPrice;
-      const change = quote?.regularMarketChange;
-      const changePercent = quote?.regularMarketChangePercent;
+      const price = data.c; // Current price
+      const change = data.d; // Change
+      const changePercent = data.dp; // Change percent
+      const high = data.h; // High
+      const low = data.l; // Low
+      const open = data.o; // Open
+      const prevClose = data.pc; // Previous close
 
-      if (!price) {
+      if (!price || price === 0) {
         console.log("❌ No price found in response");
         return { type: "none" };
       }
@@ -197,26 +192,30 @@ ${movies}
         type: "direct",
         content: `${changeEmoji} **${symbol} Live Stock Price**
 
-💰 Current Price: **$${price.toFixed(2)}**
+💰 **Current Price: $${price.toFixed(2)}**
 ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${changePercent?.toFixed(2)}%)
+
+📊 **Today's Stats:**
+- Open: $${open?.toFixed(2)}
+- High: $${high?.toFixed(2)}
+- Low: $${low?.toFixed(2)}
+- Previous Close: $${prevClose?.toFixed(2)}
 
 ⏰ Last Updated: ${new Date().toLocaleString()}
 
-*Data provided by Yahoo Finance*`
+*Data from Finnhub (Real-time)*`
       };
     }
 
     // =========================
-    // ₿ CRYPTO
+    // ₿ CRYPTO (CoinGecko - FREE!)
     // =========================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency"])) {
 
-      console.log("₿ ========================================");
       console.log("₿ CRYPTO DETECTION TRIGGERED!");
-      console.log("₿ ========================================");
 
       const res = await fetch(
-        `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
+        `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`
       );
 
       console.log("₿ CoinGecko response status:", res.status);
@@ -238,12 +237,21 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
         return { type: "none" };
       }
 
-      console.log("✅ Crypto prices found - BTC:", btc, "ETH:", eth);
+      console.log("✅ Crypto prices - BTC:", btc, "ETH:", eth);
 
       let content = "₿ **Live Cryptocurrency Prices**\n\n";
-      if (btc) content += `🟠 **Bitcoin (BTC)**: $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      if (eth) content += `🔷 **Ethereum (ETH)**: $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      content += `\n⏰ Last Updated: ${new Date().toLocaleString()}\n\n*Data provided by CoinGecko*`;
+      
+      if (btc) {
+        content += `🟠 **Bitcoin (BTC)**\n`;
+        content += `💰 Price: $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`;
+      }
+      
+      if (eth) {
+        content += `🔷 **Ethereum (ETH)**\n`;
+        content += `💰 Price: $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`;
+      }
+      
+      content += `⏰ Last Updated: ${new Date().toLocaleString()}\n\n*Data from CoinGecko (Real-time)*`;
 
       return {
         type: "direct",
@@ -256,9 +264,7 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
     // =========================
     if (containsAny(lower, ["news", "latest", "today", "headlines", "recent"])) {
 
-      console.log("📰 ========================================");
       console.log("📰 NEWS DETECTION TRIGGERED!");
-      console.log("📰 ========================================");
 
       if (!process.env.GNEWS_API_KEY) {
         console.log("❌ GNEWS_API_KEY not configured");
@@ -279,18 +285,12 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
         `${GNEWS_URL}?q=${encodeURIComponent(searchQuery)}&lang=en&max=5&apikey=${process.env.GNEWS_API_KEY}`
       );
 
-      console.log("📰 GNews response status:", res.status);
-
       if (!res.ok) {
         console.log("❌ GNews API error:", res.status);
-        const errorText = await res.text();
-        console.log("❌ Error details:", errorText);
         return { type: "none" };
       }
 
       const data = await res.json();
-      
-      console.log("📰 GNews found", data.articles?.length || 0, "articles");
 
       if (!data.articles || data.articles.length === 0) {
         console.log("❌ No articles found");
@@ -311,7 +311,7 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
 ${formatted}
 
 ⏰ Retrieved: ${new Date().toLocaleString()}
-*Data provided by GNews API*`
+*Data from GNews API*`
       };
     }
 
@@ -319,11 +319,8 @@ ${formatted}
     return { type: "none" };
 
   } catch (error) {
-    console.error("🔥 ========================================");
-    console.error("🔥 RETRIEVAL ERROR!");
-    console.error("🔥 Error message:", error.message);
-    console.error("🔥 Stack trace:", error.stack);
-    console.error("🔥 ========================================");
+    console.error("🔥 RETRIEVAL ERROR:", error.message);
+    console.error("🔥 Stack:", error.stack);
     return { type: "none" };
   }
 }
