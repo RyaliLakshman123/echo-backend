@@ -19,7 +19,7 @@ export async function getLiveContextIfNeeded(messages) {
     // =========================
     // 📈 STOCKS
     // =========================
-    if (containsAny(lower, ["stock", "share", "price", "ticker"])) {
+    if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
 
       console.log("📈 Stock detection triggered");
 
@@ -34,13 +34,18 @@ export async function getLiveContextIfNeeded(messages) {
         apple: "AAPL",
         tesla: "TSLA",
         microsoft: "MSFT",
+        msft: "MSFT",
         nvidia: "NVDA",
+        nvda: "NVDA",
         google: "GOOGL",
+        alphabet: "GOOGL",
+        googl: "GOOGL",
         amazon: "AMZN",
+        amzn: "AMZN",
         meta: "META",
-        netflix: "NFLX",
         facebook: "META",
-        alphabet: "GOOGL"
+        netflix: "NFLX",
+        nflx: "NFLX"
       };
 
       // Try to find company name if no ticker found
@@ -60,10 +65,9 @@ export async function getLiveContextIfNeeded(messages) {
 
       console.log("📊 Fetching stock for:", symbol);
 
-      // FIXED: Proper fetch syntax with parentheses
       const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
       });
       
@@ -73,8 +77,8 @@ export async function getLiveContextIfNeeded(messages) {
       }
 
       const data = await res.json();
-
-      console.log("📊 Yahoo response:", JSON.stringify(data, null, 2));
+      
+      console.log("📊 Yahoo Finance Response:", JSON.stringify(data, null, 2));
 
       const quote = data?.quoteResponse?.result?.[0];
       const price = quote?.regularMarketPrice;
@@ -87,13 +91,18 @@ export async function getLiveContextIfNeeded(messages) {
       }
 
       const changeSymbol = change >= 0 ? "+" : "";
+      const changeEmoji = change >= 0 ? "📈" : "📉";
       
       return {
         type: "direct",
-        content: `📈 **${symbol} Stock Price**
-Current: $${price.toFixed(2)}
-Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${changePercent?.toFixed(2)}%)
-Updated: ${new Date().toLocaleString()}`
+        content: `${changeEmoji} **${symbol} Live Stock Price**
+
+💰 Current Price: **$${price.toFixed(2)}**
+${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${changePercent?.toFixed(2)}%)
+
+⏰ Last Updated: ${new Date().toLocaleString()}
+
+*Data provided by Yahoo Finance*`
       };
     }
 
@@ -114,8 +123,8 @@ Updated: ${new Date().toLocaleString()}`
       }
 
       const data = await res.json();
-
-      console.log("₿ CoinGecko response:", JSON.stringify(data, null, 2));
+      
+      console.log("₿ CoinGecko Response:", JSON.stringify(data, null, 2));
 
       const btc = data?.bitcoin?.usd;
       const eth = data?.ethereum?.usd;
@@ -125,10 +134,10 @@ Updated: ${new Date().toLocaleString()}`
         return { type: "none" };
       }
 
-      let content = "₿ **Live Crypto Prices**\n";
-      if (btc) content += `Bitcoin (BTC): $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      if (eth) content += `Ethereum (ETH): $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      content += `Updated: ${new Date().toLocaleString()}`;
+      let content = "₿ **Live Cryptocurrency Prices**\n\n";
+      if (btc) content += `🟠 **Bitcoin (BTC)**: $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      if (eth) content += `🔷 **Ethereum (ETH)**: $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      content += `\n⏰ Last Updated: ${new Date().toLocaleString()}\n\n*Data provided by CoinGecko*`;
 
       return {
         type: "direct",
@@ -148,12 +157,10 @@ Updated: ${new Date().toLocaleString()}`
         return { type: "none" };
       }
 
-      // Extract search query - use original message but clean it up
       let searchQuery = lastMessage
-        .replace(/news|latest|today|headlines|recent|about|on/gi, '')
+        .replace(/news|latest|today|headlines|recent|about|on|what|are|the|give|me|show/gi, '')
         .trim();
       
-      // If query is too short, use a default
       if (searchQuery.length < 3) {
         searchQuery = "technology";
       }
@@ -166,12 +173,14 @@ Updated: ${new Date().toLocaleString()}`
 
       if (!res.ok) {
         console.log("❌ GNews API error:", res.status);
+        const errorText = await res.text();
+        console.log("❌ Error details:", errorText);
         return { type: "none" };
       }
 
       const data = await res.json();
-
-      console.log("📰 GNews response:", JSON.stringify(data, null, 2));
+      
+      console.log("📰 GNews Response:", JSON.stringify(data, null, 2));
 
       if (!data.articles || data.articles.length === 0) {
         console.log("❌ No articles found");
@@ -180,17 +189,23 @@ Updated: ${new Date().toLocaleString()}`
 
       const formatted = data.articles.map((a, i) =>
         `**${i + 1}. ${a.title}**
-Source: ${a.source.name}
-Published: ${new Date(a.publishedAt).toLocaleDateString()}
-${a.description || ''}`
+📰 Source: ${a.source.name}
+📅 Published: ${new Date(a.publishedAt).toLocaleDateString()}
+📝 ${a.description || 'No description available'}`
       ).join("\n\n");
 
       return {
         type: "inject",
-        content: `📰 **Latest News Results**\n\n${formatted}\n\n---\n*Retrieved: ${new Date().toLocaleString()}*`
+        content: `📰 LIVE NEWS RESULTS FOR "${searchQuery.toUpperCase()}"
+
+${formatted}
+
+⏰ Retrieved: ${new Date().toLocaleString()}
+*Data provided by GNews API*`
       };
     }
 
+    console.log("ℹ️ No retrieval triggers matched");
     return { type: "none" };
 
   } catch (error) {
