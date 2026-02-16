@@ -19,7 +19,7 @@ export async function getLiveContextIfNeeded(messages) {
     // =========================
     // 📈 STOCKS
     // =========================
-    if (containsAny(lower, ["stock", "share"])) {
+    if (containsAny(lower, ["stock", "share", "price"])) {
 
       console.log("📈 Stock detection triggered");
 
@@ -55,12 +55,23 @@ export async function getLiveContextIfNeeded(messages) {
 
       console.log("📊 Fetching stock for:", symbol);
 
-      const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`);
+      const res = await fetch(`${YAHOO_FINANCE_URL}?symbols=${symbol}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+      
+      if (!res.ok) {
+        console.log("❌ Yahoo Finance API error:", res.status);
+        return { type: "none" };
+      }
+
       const data = await res.json();
 
       console.log("📊 Yahoo response:", data);
 
-      const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
+      const quote = data?.quoteResponse?.result?.[0];
+      const price = quote?.regularMarketPrice;
 
       if (!price) {
         console.log("❌ No price found");
@@ -69,20 +80,25 @@ export async function getLiveContextIfNeeded(messages) {
 
       return {
         type: "direct",
-        content: `📈 Live stock price for ${symbol} is $${price}`
+        content: `📈 Live stock price for ${symbol} is $${price.toFixed(2)}`
       };
     }
 
     // =========================
     // ₿ CRYPTO
     // =========================
-    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth"])) {
+    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto"])) {
 
       console.log("₿ Crypto detection triggered");
 
       const res = await fetch(
         `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
       );
+
+      if (!res.ok) {
+        console.log("❌ CoinGecko API error:", res.status);
+        return { type: "none" };
+      }
 
       const data = await res.json();
 
@@ -99,21 +115,31 @@ export async function getLiveContextIfNeeded(messages) {
       return {
         type: "direct",
         content: `₿ Live crypto prices:
-Bitcoin: $${btc ?? "N/A"}
-Ethereum: $${eth ?? "N/A"}`
+Bitcoin: $${btc?.toLocaleString() ?? "N/A"}
+Ethereum: $${eth?.toLocaleString() ?? "N/A"}`
       };
     }
 
     // =========================
     // 📰 NEWS
     // =========================
-    if (containsAny(lower, ["news", "latest", "today"])) {
+    if (containsAny(lower, ["news", "latest", "today", "headlines"])) {
 
       console.log("📰 News detection triggered");
+
+      if (!process.env.GNEWS_API_KEY) {
+        console.log("❌ GNEWS_API_KEY not configured");
+        return { type: "none" };
+      }
 
       const res = await fetch(
         `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
       );
+
+      if (!res.ok) {
+        console.log("❌ GNews API error:", res.status);
+        return { type: "none" };
+      }
 
       const data = await res.json();
 
