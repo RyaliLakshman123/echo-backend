@@ -1,116 +1,84 @@
-const GNEWS_URL = "https://gnews.io/api/v4/search";
-const ALPHA_URL = "https://www.alphavantage.co/query";
-const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
+import express from "express";
+import { getChatResponseStream } from "../services/groq.js";
+import { getLiveContextIfNeeded } from "../../utility/retrieval.js";
 
-function containsAny(text, words) {
-  return words.some(word => text.toLowerCase().includes(word));
-}
+const router = express.Router();
 
-export async function getLiveContextIfNeeded(messages) {
-  const lastMessage = messages[messages.length - 1]?.content;
-  if (!lastMessage) return { type: "none" };
-
-  const lower = lastMessage.toLowerCase();
-
+router.post("/", async (req, res) => {
   try {
+    const { messages, mode, isPro } = req.body;
 
-    // =========================
-    // 📈 STOCKS (DIRECT RETURN)
-    // =========================
-    if (containsAny(lower, ["stock", "share price"])) {
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
 
-      let symbol = null;
+    // SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
 
-      const tickerMatch = lastMessage.match(/\b[A-Z]{2,5}\b/);
-      if (tickerMatch) {
-        symbol = tickerMatch[0];
+    // 🔥 STEP 1 — Hybrid Retrieval
+    const liveResult = await getLiveContextIfNeeded(messages);
+
+    // ========================================
+    // ✅ DIRECT DATA (Stocks / Crypto)
+    // ========================================
+    if (liveResult.type === "direct") {
+      res.write(
+        `data: ${JSON.stringify({
+          content: liveResult.content,
+          modelUsed: "Live Data"
+        })}\n\n`
+      );
+      res.write("data: [DONE]\n\n");
+      return res.end();
+    }
+
+    // ========================================
+    // ✅ INJECT DATA (News)
+    // ========================================
+    let enhancedMessages = [...messages];
+
+    if (liveResult.type === "inject" && typeof liveResult.content === "string") {
+      enhancedMessages = [
+        {
+          role: "system",
+          content: liveResult.content, // 🔥 MUST BE STRING
+        },
+        ...messages,
+      ];
+    }
+
+    // ========================================
+    // 🔥 STREAM TO GROQ
+    // ========================================
+    await getChatResponseStream(
+      enhancedMessages,
+      mode,
+      isPro,
+      (chunk) => {
+        res.write(
+          `data: ${JSON.stringify({
+            content: chunk,
+            modelUsed: isPro ? "Echo Pro" : "Echo",
+          })}\n\n`
+        );
       }
+    );
 
-      const companyMap = {
-        apple: "AAPL",
-        tesla: "TSLA",
-        microsoft: "MSFT",
-        nvidia: "NVDA",
-        google: "GOOGL",
-        amazon: "AMZN",
-        meta: "META",
-        netflix: "NFLX"
-      };
-
-      if (!symbol) {
-        for (const name in companyMap) {
-          if (lower.includes(name)) {
-            symbol = companyMap[name];
-            break;
-          }
-        }
-      }
-
-      if (!symbol) return { type: "none" };
-
-      const res = await fetch(
-        `${ALPHA_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${process.env.ALPHA_VANTAGE_KEY}`
-      );
-
-      const data = await res.json();
-      const price = data["Global Quote"]?.["05. price"];
-
-      if (!price) return { type: "none" };
-
-      return {
-        type: "direct",
-        content: `📈 Live stock price for ${symbol} is $${price}`
-      };
-    }
-
-    // =========================
-    // ₿ CRYPTO (DIRECT RETURN)
-    // =========================
-    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto"])) {
-
-      const res = await fetch(
-        `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd`
-      );
-
-      const data = await res.json();
-
-      return {
-        type: "direct",
-        content: `₿ Live crypto prices:
-Bitcoin: $${data.bitcoin?.usd}
-Ethereum: $${data.ethereum?.usd}`
-      };
-    }
-
-    // =========================
-    // 📰 NEWS (INJECT INTO LLM)
-    // =========================
-    if (containsAny(lower, ["news", "latest", "today"])) {
-
-      const res = await fetch(
-        `${GNEWS_URL}?q=${encodeURIComponent(lastMessage)}&lang=en&max=3&apikey=${process.env.GNEWS_API_KEY}`
-      );
-
-      const data = await res.json();
-      if (!data.articles || data.articles.length === 0)
-        return { type: "none" };
-
-      const formatted = data.articles.map(a =>
-        `Title: ${a.title}
-Date: ${a.publishedAt}
-Source: ${a.source.name}`
-      ).join("\n\n");
-
-      return {
-        type: "inject",
-        content: `Here are the latest news results:\n\n${formatted}`
-      };
-    }
-
-    return { type: "none" };
+    res.write("data: [DONE]\n\n");
+    res.end();
 
   } catch (error) {
-    console.error("Hybrid retrieval error:", error.message);
-    return { type: "none" };
+    console.error("Streaming error:", error);
+    res.write(
+      `data: ${JSON.stringify({
+        error: error.message,
+      })}\n\n`
+    );
+    res.end();
   }
-}
+});
+
+export default router;
