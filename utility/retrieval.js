@@ -1,6 +1,6 @@
 const GNEWS_URL = "https://gnews.io/api/v4/search";
-const COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
-const FINNHUB_URL = "https://finnhub.io/api/v1/quote"; // FREE Stock API
+const COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets";
+const FINNHUB_URL = "https://finnhub.io/api/v1/quote";
 const TMDB_URL = "https://api.themoviedb.org/3/search/movie";
 
 function containsAny(text, words) {
@@ -101,7 +101,7 @@ ${movies}
     }
 
     // =========================
-    // 📈 STOCKS (Using Finnhub - FREE!)
+    // 📈 STOCKS
     // =========================
     if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
 
@@ -170,13 +170,13 @@ ${movies}
       
       console.log("📊 Finnhub Response:", JSON.stringify(data, null, 2));
 
-      const price = data.c; // Current price
-      const change = data.d; // Change
-      const changePercent = data.dp; // Change percent
-      const high = data.h; // High
-      const low = data.l; // Low
-      const open = data.o; // Open
-      const prevClose = data.pc; // Previous close
+      const price = data.c;
+      const change = data.d;
+      const changePercent = data.dp;
+      const high = data.h;
+      const low = data.l;
+      const open = data.o;
+      const prevClose = data.pc;
 
       if (!price || price === 0) {
         console.log("❌ No price found in response");
@@ -208,14 +208,29 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
     }
 
     // =========================
-    // ₿ CRYPTO (CoinGecko - FREE!)
+    // ₿ CRYPTO (Enhanced with detailed stats)
     // =========================
     if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency"])) {
 
       console.log("₿ CRYPTO DETECTION TRIGGERED!");
 
+      // Determine which coins to fetch
+      const coins = [];
+      if (lower.includes("bitcoin") || lower.includes("btc")) {
+        coins.push("bitcoin");
+      }
+      if (lower.includes("ethereum") || lower.includes("eth")) {
+        coins.push("ethereum");
+      }
+      // If neither specified, show both
+      if (coins.length === 0) {
+        coins.push("bitcoin", "ethereum");
+      }
+
+      const coinsParam = coins.join(",");
+
       const res = await fetch(
-        `${COINGECKO_URL}?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`
+        `${COINGECKO_URL}?vs_currency=usd&ids=${coinsParam}&order=market_cap_desc&per_page=10&page=1&sparkline=false&price_change_percentage=24h`
       );
 
       console.log("₿ CoinGecko response status:", res.status);
@@ -229,33 +244,39 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
       
       console.log("₿ CoinGecko Response:", JSON.stringify(data, null, 2));
 
-      const btc = data?.bitcoin?.usd;
-      const eth = data?.ethereum?.usd;
-
-      if (!btc && !eth) {
-        console.log("❌ No crypto price found");
+      if (!data || data.length === 0) {
+        console.log("❌ No crypto data found");
         return { type: "none" };
       }
 
-      console.log("✅ Crypto prices - BTC:", btc, "ETH:", eth);
+      console.log("✅ Crypto data found for", data.length, "coins");
 
-      let content = "₿ **Live Cryptocurrency Prices**\n\n";
-      
-      if (btc) {
-        content += `🟠 **Bitcoin (BTC)**\n`;
-        content += `💰 Price: $${btc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`;
-      }
-      
-      if (eth) {
-        content += `🔷 **Ethereum (ETH)**\n`;
-        content += `💰 Price: $${eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`;
-      }
-      
-      content += `⏰ Last Updated: ${new Date().toLocaleString()}\n\n*Data from CoinGecko (Real-time)*`;
+      const cryptoDetails = data.map(coin => {
+        const changeEmoji = coin.price_change_percentage_24h >= 0 ? "📈" : "📉";
+        const changeSymbol = coin.price_change_percentage_24h >= 0 ? "+" : "";
+        
+        return `${changeEmoji} **${coin.name} (${coin.symbol.toUpperCase()}) Live Price**
+
+💰 **Current Price: $${coin.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}**
+${changeEmoji} 24h Change: ${changeSymbol}${coin.price_change_24h?.toFixed(2)} (${changeSymbol}${coin.price_change_percentage_24h?.toFixed(2)}%)
+
+📊 **24h Stats:**
+- High: $${coin.high_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+- Low: $${coin.low_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+- Market Cap: $${(coin.market_cap / 1e9).toFixed(2)}B
+- Volume: $${(coin.total_volume / 1e9).toFixed(2)}B
+- Rank: #${coin.market_cap_rank}`;
+      }).join("\n\n---\n\n");
 
       return {
         type: "direct",
-        content
+        content: `₿ **Live Cryptocurrency Prices**
+
+${cryptoDetails}
+
+⏰ Last Updated: ${new Date().toLocaleString()}
+
+*Data from CoinGecko (Real-time)*`
       };
     }
 
