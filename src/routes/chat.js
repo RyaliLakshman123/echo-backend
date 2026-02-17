@@ -20,7 +20,22 @@ router.post("/", async (req, res) => {
 
     // 🔥 STEP 1 — Hybrid Retrieval
     const liveResult = await getLiveContextIfNeeded(messages);
-
+	// 🚫 BLOCK LLM for financial data (no hallucination fallback)
+if (
+  liveResult.type === "none" &&
+  /bitcoin|btc|ethereum|eth|crypto|stock|share|price/i.test(
+    messages[messages.length - 1].content
+  )
+) {
+  res.write(
+    `data: ${JSON.stringify({
+      content: "⚠️ Unable to fetch live financial data right now. Please try again shortly.",
+      modelUsed: "Live Data",
+    })}\n\n`
+  );
+  res.write("data: [DONE]\n\n");
+  return res.end();
+}}
     // ========================================
     // ✅ DIRECT DATA (Stocks / Crypto)
     // ========================================
