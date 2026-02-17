@@ -97,6 +97,79 @@ ${movies}
     }
 
     // =========================
+    // ₿ CRYPTO (Enhanced with detailed stats)
+    // =========================
+    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency"])) {
+
+      console.log("₿ CRYPTO DETECTION TRIGGERED!");
+
+      // Determine which coins to fetch
+      const coins = [];
+      if (lower.includes("bitcoin") || lower.includes("btc")) {
+        coins.push("bitcoin");
+      }
+      if (lower.includes("ethereum") || lower.includes("eth")) {
+        coins.push("ethereum");
+      }
+      // If neither specified, show both
+      if (coins.length === 0) {
+        coins.push("bitcoin", "ethereum");
+      }
+
+      const coinsParam = coins.join(",");
+
+      const res = await fetch(
+        `${COINGECKO_URL}?vs_currency=usd&ids=${coinsParam}&order=market_cap_desc&per_page=10&page=1&sparkline=false&price_change_percentage=24h`
+      );
+
+      console.log("₿ CoinGecko response status:", res.status);
+
+      if (!res.ok) {
+        console.log("❌ CoinGecko API error:", res.status);
+        return { type: "none" };
+      }
+
+      const data = await res.json();
+      
+      console.log("₿ CoinGecko Response:", JSON.stringify(data, null, 2));
+
+      if (!data || data.length === 0) {
+        console.log("❌ No crypto data found");
+        return { type: "none" };
+      }
+
+      console.log("✅ Crypto data found for", data.length, "coins");
+
+      const cryptoDetails = data.map(coin => {
+        const changeEmoji = coin.price_change_percentage_24h >= 0 ? "📈" : "📉";
+        const changeSymbol = coin.price_change_percentage_24h >= 0 ? "+" : "";
+        
+        return `${changeEmoji} **${coin.name} (${coin.symbol.toUpperCase()}) Live Price**
+
+💰 **Current Price: $${coin.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}**
+${changeEmoji} 24h Change: ${changeSymbol}${coin.price_change_24h?.toFixed(2)} (${changeSymbol}${coin.price_change_percentage_24h?.toFixed(2)}%)
+
+📊 **24h Stats:**
+- High: $${coin.high_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+- Low: $${coin.low_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+- Market Cap: $${(coin.market_cap / 1e9).toFixed(2)}B
+- Volume: $${(coin.total_volume / 1e9).toFixed(2)}B
+- Rank: #${coin.market_cap_rank}`;
+      }).join("\n\n---\n\n");
+
+      return {
+        type: "direct",
+        content: `₿ **Live Cryptocurrency Prices**
+
+${cryptoDetails}
+
+⏰ Last Updated: ${new Date().toLocaleString()}
+
+*Data from CoinGecko (Real-time)*`
+      };
+    }
+
+// =========================
     // 📈 STOCKS
     // =========================
     if (containsAny(lower, ["stock", "share", "price", "ticker", "aapl", "tsla", "apple", "tesla", "microsoft", "nvidia", "google", "amazon", "meta", "msft", "nvda", "googl", "amzn", "nflx", "netflix"])) {
@@ -200,79 +273,6 @@ ${changeEmoji} Change: ${changeSymbol}$${change?.toFixed(2)} (${changeSymbol}${c
 ⏰ Last Updated: ${new Date().toLocaleString()}
 
 *Data from Finnhub (Real-time)*`
-      };
-    }
-
-    // =========================
-    // ₿ CRYPTO (Enhanced with detailed stats)
-    // =========================
-    if (containsAny(lower, ["bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency"])) {
-
-      console.log("₿ CRYPTO DETECTION TRIGGERED!");
-
-      // Determine which coins to fetch
-      const coins = [];
-      if (lower.includes("bitcoin") || lower.includes("btc")) {
-        coins.push("bitcoin");
-      }
-      if (lower.includes("ethereum") || lower.includes("eth")) {
-        coins.push("ethereum");
-      }
-      // If neither specified, show both
-      if (coins.length === 0) {
-        coins.push("bitcoin", "ethereum");
-      }
-
-      const coinsParam = coins.join(",");
-
-      const res = await fetch(
-        `${COINGECKO_URL}?vs_currency=usd&ids=${coinsParam}&order=market_cap_desc&per_page=10&page=1&sparkline=false&price_change_percentage=24h`
-      );
-
-      console.log("₿ CoinGecko response status:", res.status);
-
-      if (!res.ok) {
-        console.log("❌ CoinGecko API error:", res.status);
-        return { type: "none" };
-      }
-
-      const data = await res.json();
-      
-      console.log("₿ CoinGecko Response:", JSON.stringify(data, null, 2));
-
-      if (!data || data.length === 0) {
-        console.log("❌ No crypto data found");
-        return { type: "none" };
-      }
-
-      console.log("✅ Crypto data found for", data.length, "coins");
-
-      const cryptoDetails = data.map(coin => {
-        const changeEmoji = coin.price_change_percentage_24h >= 0 ? "📈" : "📉";
-        const changeSymbol = coin.price_change_percentage_24h >= 0 ? "+" : "";
-        
-        return `${changeEmoji} **${coin.name} (${coin.symbol.toUpperCase()}) Live Price**
-
-💰 **Current Price: $${coin.current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}**
-${changeEmoji} 24h Change: ${changeSymbol}${coin.price_change_24h?.toFixed(2)} (${changeSymbol}${coin.price_change_percentage_24h?.toFixed(2)}%)
-
-📊 **24h Stats:**
-- High: $${coin.high_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-- Low: $${coin.low_24h?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-- Market Cap: $${(coin.market_cap / 1e9).toFixed(2)}B
-- Volume: $${(coin.total_volume / 1e9).toFixed(2)}B
-- Rank: #${coin.market_cap_rank}`;
-      }).join("\n\n---\n\n");
-
-      return {
-        type: "direct",
-        content: `₿ **Live Cryptocurrency Prices**
-
-${cryptoDetails}
-
-⏰ Last Updated: ${new Date().toLocaleString()}
-
-*Data from CoinGecko (Real-time)*`
       };
     }
 
