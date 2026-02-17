@@ -28,15 +28,11 @@ export async function getLiveContextIfNeeded(messages) {
       console.log("🎬 MOVIE DETECTION TRIGGERED!");
 
       let movieName = lastMessage
-        .replace(/when|will|be|released|movie|film|release|date|about|the|tell|me|it|is/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+ 	 .replace(/when|will|be|released|movie|film|release|date|about|tell|me|is|the/gi, '')
+ 	 .replace(/[^\w\s:]/g, '')   // keep colon for titles like Avengers: Doomsday
+ 	 .replace(/\s+/g, ' ')
+ 	 .trim();
 
-      if (lower.includes("doom's day") || lower.includes("doomsday")) {
-        movieName = "doomsday";
-      } else if (lower.includes("doom")) {
-        movieName = "doom";
-      }
 
       if (!movieName || movieName.length < 2) {
         console.log("❌ No movie name detected");
