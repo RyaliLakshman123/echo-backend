@@ -27,6 +27,28 @@ if (containsAny(lower, ["movie", "movies", "film", "release", "trailer", "cinema
 
   console.log("🎬 MOVIE DETECTION TRIGGERED!");
 
+  // 🔥 Handle "more / another / next" follow-up
+  if (containsAny(lower, ["another", "more", "next"])) {
+
+    const previousUserMessage = messages
+      .slice()
+      .reverse()
+      .find(m =>
+        m.role === "user" &&
+        m.content !== lastMessage &&
+        containsAny(m.content.toLowerCase(), ["movie", "movies", "film"])
+      );
+
+    if (previousUserMessage) {
+      console.log("🎬 FOLLOW-UP DETECTED. Reusing:", previousUserMessage.content);
+
+      return await getLiveContextIfNeeded([
+        ...messages.slice(0, -1),
+        previousUserMessage
+      ]);
+    }
+  }
+
   const tmdbApiKey = process.env.TMDB_API_KEY;
   if (!tmdbApiKey) return { type: "none" };
 
@@ -57,7 +79,11 @@ if (containsAny(lower, ["movie", "movies", "film", "release", "trailer", "cinema
       };
     }
 
-    const movies = data.results.slice(0, 5).map((movie, index) => {
+   const numberMatch = lower.match(/\b\d+\b/);
+   const limit = numberMatch ? parseInt(numberMatch[0]) : 5;
+   const finalLimit = Math.min(limit, 20);
+
+   const movies = data.results.slice(0, finalLimit).map((movie, index) => {
       return `**${index + 1}. ${movie.title}**
 📅 ${movie.release_date}
 ⭐ Rating: ${movie.vote_average}/10
