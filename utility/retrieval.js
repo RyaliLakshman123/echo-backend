@@ -19,83 +19,106 @@ export async function getLiveContextIfNeeded(messages) {
   console.log("🔍 ========================================");
 
   try {
-
+     
     // =========================
-    // 🎬 MOVIES
-    // =========================
-    if (containsAny(lower, ["movie", "film", "release", "doom", "doomsday", "marvel", "trailer", "cinema", "frankenstein"])) {
+// 🎬 MOVIES
+// =========================
+if (containsAny(lower, ["movie", "movies", "film", "release", "trailer", "cinema"])) {
 
-      console.log("🎬 MOVIE DETECTION TRIGGERED!");
+  console.log("🎬 MOVIE DETECTION TRIGGERED!");
 
-      let movieName = lastMessage
- 	 .replace(/when|will|be|released|movie|film|release|date|about|tell|me|is|the/gi, '')
- 	 .replace(/[^\w\s:]/g, '')   // keep colon for titles like Avengers: Doomsday
- 	 .replace(/\s+/g, ' ')
- 	 .trim();
+  const tmdbApiKey = process.env.TMDB_API_KEY;
+  if (!tmdbApiKey) return { type: "none" };
 
+  // ======================================
+  // 🟣 LIST QUERY (Top / 2026 / English)
+  // ======================================
+  if (
+    lower.includes("top") ||
+    lower.includes("best") ||
+    lower.includes("2026") ||
+    lower.includes("2025")
+  ) {
+    console.log("🎬 MOVIE LIST MODE");
 
-      if (!movieName || movieName.length < 2) {
-        console.log("❌ No movie name detected");
-        return { type: "none" };
-      }
+    const yearMatch = lower.match(/\b(20\d{2})\b/);
+    const year = yearMatch ? yearMatch[1] : new Date().getFullYear();
 
-      const tmdbApiKey = process.env.TMDB_API_KEY;
+    const discoverURL = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbApiKey}&sort_by=vote_average.desc&primary_release_year=${year}&vote_count.gte=100&with_original_language=en`;
 
-      if (!tmdbApiKey) {
-        console.log("❌ TMDB_API_KEY not configured");
-        return { type: "none" };
-      }
+    const res = await fetch(discoverURL);
+    if (!res.ok) return { type: "none" };
 
-      const res = await fetch(
-        `${TMDB_URL}?api_key=${tmdbApiKey}&query=${encodeURIComponent(movieName)}&include_adult=false`
-      );
-
-      if (!res.ok) {
-        console.log("❌ TMDB API error:", res.status);
-        return { type: "none" };
-      }
-
-      const data = await res.json();
-
-      if (!data.results || data.results.length === 0) {
-        return {
-          type: "direct",
-          content: `🎬 No movie found matching "${movieName}". Try being more specific.`
-        };
-      }
-
-      const movies = data.results.slice(0, 3).map(movie => {
-        const releaseDate = movie.release_date 
-          ? new Date(movie.release_date).toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })
-          : "Release date not announced";
-        
-        const status = movie.release_date 
-          ? new Date(movie.release_date) > new Date() 
-            ? "📅 Upcoming" 
-            : "✅ Released"
-          : "⏳ TBA";
-
-        return `**${movie.title}** (${movie.release_date ? new Date(movie.release_date).getFullYear() : 'TBA'})
-${status}: ${releaseDate}
-⭐ Rating: ${movie.vote_average}/10
-📝 ${movie.overview || 'No description available'}`;
-      }).join("\n\n---\n\n");
-
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) {
       return {
         type: "direct",
-        content: `🎬 **Movie Search Results for "${movieName}"**
+        content: `🎬 No major English movies found for ${year}.`
+      };
+    }
+
+    const movies = data.results.slice(0, 5).map((movie, index) => {
+      return `**${index + 1}. ${movie.title}**
+📅 ${movie.release_date}
+⭐ Rating: ${movie.vote_average}/10
+📝 ${movie.overview || "No description available"}`;
+    }).join("\n\n");
+
+    return {
+      type: "direct",
+      content: `🎬 **Top English Movies of ${year}**
 
 ${movies}
 
 ⏰ Last Updated: ${new Date().toLocaleString()}
 *Data from The Movie Database (TMDB)*`
-      };
-    }
+    };
+  }
 
+  // ======================================
+  // 🔵 SPECIFIC MOVIE SEARCH
+  // ======================================
+
+  let movieName = lastMessage
+    .replace(/when|will|be|released|movie|film|release|date|about|tell|me|is|the/gi, '')
+    .replace(/[^\w\s:]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!movieName || movieName.length < 2) {
+    return { type: "none" };
+  }
+
+  const res = await fetch(
+    `${TMDB_URL}?api_key=${tmdbApiKey}&query=${encodeURIComponent(movieName)}&include_adult=false`
+  );
+
+  if (!res.ok) return { type: "none" };
+
+  const data = await res.json();
+
+  if (!data.results || data.results.length === 0) {
+    return {
+      type: "direct",
+      content: `🎬 No movie found matching "${movieName}". Try being more specific.`
+    };
+  }
+
+  const movie = data.results[0];
+
+  return {
+    type: "direct",
+    content: `🎬 **${movie.title}**
+
+📅 Release Date: ${movie.release_date || "TBA"}
+⭐ Rating: ${movie.vote_average}/10
+📝 ${movie.overview || "No description available"}
+
+⏰ Last Updated: ${new Date().toLocaleString()}
+*Data from The Movie Database (TMDB)*`
+  };
+}
+     
     // =========================
     // ₿ CRYPTO (Enhanced with detailed stats)
     // =========================
