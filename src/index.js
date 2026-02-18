@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 
 import chatRoute from "./routes/chat.js";
 import newsRoute from "./routes/news.js";
+import imageRoute from "./routes/image.js";
 
 dotenv.config();
 
@@ -11,6 +12,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use("/api/image", imageRoute);
 
 // ✅ Health check endpoint (REQUIRED for Render)
 app.get("/", (req, res) => {
